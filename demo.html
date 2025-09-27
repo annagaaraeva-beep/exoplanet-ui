@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ExoDetect — інтерфейс для аналізу екзопланет</title>
+  <meta name="description" content="Веб-інтерфейс для завантаження даних екзопланет і відправки на AI/ML сервіс для ідентифікації">
+  <!-- Chart.js CDN for visualizations -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --muted:#9aa4b2; --accent:#7c3aed;
+      --glass: rgba(255,255,255,0.03);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071022 0%,#071126 60%);color:#e6eef6}
+    .container{max-width:1100px;margin:32px auto;padding:24px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    p.lead{color:var(--muted);margin:6px 0 0;font-size:13px}
+
+    .grid{display:grid;grid-template-columns:1fr 420px;gap:20px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.04);padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+
+    .upload-area{border:2px dashed rgba(255,255,255,0.04);padding:18px;border-radius:10px;text-align:center;transition:all .15s}
+    .upload-area.dragover{border-color:rgba(124,58,237,0.9);transform:translateY(-4px)}
+    .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:var(--accent);color:white;text-decoration:none;font-weight:600;margin-top:8px}
+    input[type=file]{display:none}
+
+    .meta{font-size:13px;color:var(--muted);margin-top:6px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:6px 8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.02)}
+
+    .log{height:170px;overflow:auto;background:var(--glass);padding:10px;border-radius:8px;font-family:monospace;font-size:12px;color:var(--muted)}
+
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .small{font-size:12px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.02);cursor:pointer}
+
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+
+    /* responsive */
+    @media (max-width:980px){
+      .grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>ExoDetect — UI для майбутнього AI/ML</h1>
+        <p class="lead">Завантажуйте набори даних (CSV/JSON), попередній перегляд, візуалізація та відправка на модель (через API).</p>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:12px;color:var(--muted)">Готово для інтеграції моделі</div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Left column: upload, preview, controls -->
+      <div class="card">
+        <h3>1) Завантажити дані</h3>
+        <div id="drop" class="upload-area">
+          <p style="margin:8px 0">Перетягніть CSV або JSON сюди або</p>
+          <label class="btn" for="file">Обрати файл</label>
+          <input id="file" type="file" accept=".csv,application/json,text/csv" />
+          <div class="meta">Підтримувані формати: CSV (рекомендовано), JSON. Очікувані поля: pl_name, pl_orbper, pl_rade, pl_bmasse, disc_year, st_teff, st_rad, st_mass (залежно від набору даних NASA).</div>
+        </div>
+
+        <div style="margin-top:12px">
+          <button id="loadSample" class="small">Завантажити приклад (sample CSV)</button>
+          <button id="clear" class="small">Очистити</button>
+        </div>
+
+        <h3 style="margin-top:14px">2) Попередній перегляд</h3>
+        <div id="preview" style="max-height:260px;overflow:auto"></div>
+
+        <h3 style="margin-top:12px">3) Надіслати на аналіз</h3>
+        <div class="actions">
+          <button id="analyze" class="btn">Надіслати на /api/analyze</button>
+          <button id="analyzews" class="small">Надіслати через WebSocket</button>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="log" id="log">Лог подій...
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column: visualizations / results -->
+      <div class="card">
+        <h3>Візуалізації & результати</h3>
+        <canvas id="chartScatter" height="260"></canvas>
+        <h4 style="margin-top:12px">Результат ідентифікації</h4>
+        <div id="resultArea" style="min-height:110px;padding:10px;background:rgba(255,255,255,0.01);border-radius:8px;color:var(--muted)">Тут з'являться результати від моделі.</div>
+
+        <h4 style="margin-top:12px">Параметри API / інтеграція</h4>
+        <table>
+          <tr><th>Endpoint</th><td><code>/api/analyze</code></td></tr>
+          <tr><th>Метод</th><td>POST (FormData або JSON)</td></tr>
+          <tr><th>Очікується</th><td>CSV файл або масив об'єктів JSON</td></tr>
+          <tr><th>Відповідь</th><td>JSON: { predictions: [...], meta: {...} }</td></tr>
+        </table>
+
+        <p style="margin-top:10px;color:var(--muted);font-size:13px">Порада: модель може бути інтегрована як окремий microservice (FastAPI / Flask / Express) або як TF.js/ONNX WASM модуль на клієнті. Для великих моделей — виконуйте inference на сервері.</p>
+      </div>
+    </div>
+
+    <footer>
+      <strong>Примітка:</strong> код — готовий шаблон. У коментарях у JS показано, куди підключати сервіс моделі та що чекати від відповіді.
+    </footer>
+  </div>
+
+  <script>
+    // Utility helpers
+    const $ = id => document.getElementById(id);
+    const log = (s)=>{const l=$('log'); l.textContent = (new Date()).toLocaleTimeString()+ ' — ' + s + '\n' + l.textContent}
+
+    // CSV parser (simple) — converts CSV text to array of objects using first row as headers
+    function parseCSV(text){
+      const rows = text.trim().split(/\r?\n/).filter(r=>r.trim()!=="");
+      if(!rows.length) return [];
+      const headers = rows[0].split(/,|;|\t/).map(h=>h.trim());
+      const data = rows.slice(1).map(r=>{
+        const cols = r.split(/,|;|\t/);
+        const obj = {};
+        headers.forEach((h,i)=>obj[h]=cols[i]!==undefined?cols[i].trim():"");
+        return obj;
+      });
+      return data;
+    }
+
+    // State
+    let currentData = [];
+
+    // Drag & drop
+    const drop = $('drop');
+    ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('dragover')}));
+    ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('dragover')}));
+    drop.addEventListener('drop', async (ev)=>{
+      const f = ev.dataTransfer.files[0];
+      if(!f) return; handleFile(f);
+    });
+
+    // File input
+    $('file').addEventListener('change',e=>{if(e.target.files[0]) handleFile(e.target.files[0])});
+
+    async function handleFile(file){
+      log('Файл отримано: ' + file.name);
+      const txt = await file.text();
+      let parsed = [];
+      if(file.type.includes('json') || file.name.toLowerCase().endsWith('.json')){
+        try{ parsed = JSON.parse(txt); if(!Array.isArray(parsed)) parsed = [parsed]; }
+        catch(err){ log('Помилка JSON: '+err.message); alert('Невірний JSON'); return }
+      } else {
+        parsed = parseCSV(txt);
+      }
+      currentData = parsed;
+      renderPreview(parsed);
+      renderScatter(parsed);
+    }
+
+    function renderPreview(data){
+      const p = $('preview'); p.innerHTML='';
+      if(!data || data.length===0){ p.textContent='Немає даних'; return }
+      const keys = Object.keys(data[0]).slice(0,8);
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr>' + keys.map(k=>`<th>${k}</th>`).join('') + '</tr>';
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      data.slice(0,30).forEach(row=>{
+        const tr = document.createElement('tr');
+        keys.forEach(k=>{ const td = document.createElement('td'); td.textContent = row[k] ?? ''; tr.appendChild(td) });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      p.appendChild(table);
+    }
+
+    // Chart: scatter of orbital period vs radius (if available)
+    let scatterChart = null;
+    function renderScatter(data){
+      const x = [], y = [], labels = [];
+      data.forEach(d=>{
+        const ox = parseFloat(d.pl_orbper ?? d.orbital_period ?? d.orbPeriod);
+        const ry = parseFloat(d.pl_rade ?? d.radius ?? d.pl_rade);
+        if(!isNaN(ox) && !isNaN(ry)){ x.push(ox); y.push(ry); labels.push(d.pl_name ?? d.name ?? 'unknown') }
+      });
+      const ctx = $('chartScatter').getContext('2d');
+      if(scatterChart) scatterChart.destroy();
+      scatterChart = new Chart(ctx, {
+        type:'scatter',
+        data:{ datasets:[{ label:'Orbital period (days) vs Radius (R⊕)', data: x.map((xx,i)=>({x:xx,y:y[i],label:labels[i]})) }] },
+        options:{ plugins:{ tooltip:{callbacks:{label:ctx=>` ${ctx.raw.label}: ${ctx.raw.x} d, ${ctx.raw.y} R⊕`}}}, scales:{x:{title:{display:true,text:'Orbital period (days)'}}, y:{title:{display:true,text:'Radius (R⊕)'}}} }
+      });
+    }
+
+    // Actions
+    $('loadSample').addEventListener('click',()=>{
+      const sample = `pl_name,pl_orbper,pl_rade,pl_bmasse,disc_year,st_teff,st_rad,st_mass\nKepler-186f,129.9,1.11,1.1,2014,3788,0.47,0.54\nHD 209458 b,3.524,1.36,220,1999,6065,1.2,1.15`;
+      currentData = parseCSV(sample);
+      renderPreview(currentData);
+      renderScatter(currentData);
+      log('Завантажено приклад даних');
+    });
+
+    $('clear').addEventListener('click',()=>{ currentData=[]; $('preview').innerHTML=''; if(scatterChart) scatterChart.destroy(); $('resultArea').textContent='Тут з\'являться результати від моделі.'; log('Дані очищено') });
+
+    // Send to API (server-side model recommended)
+    $('analyze').addEventListener('click', async ()=>{
+      if(!currentData || currentData.length===0){ alert('Немає даних для аналізу'); return }
+      try{
+        log('Підготовка даних для відправлення...');
+        // You can send JSON or a CSV file. Here we send JSON.
+        const body = JSON.stringify({ data: currentData });
+        const resp = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+        if(!resp.ok){ log('Сервер повернув помилку: ' + resp.status); $('resultArea').textContent = 'Помилка сервера: ' + resp.status; return }
+        const resjson = await resp.json();
+        log('Отримано відповідь від /api/analyze');
+        displayResults(resjson);
+      } catch(err){ log('Помилка при відправленні: '+err.message); alert('Помилка при відправленні: ' + err.message) }
+    });
+
+    // Option: WebSocket example (simple)
+    $('analyzews').addEventListener('click', ()=>{
+      if(!currentData || currentData.length===0){ alert('Немає даних для аналізу'); return }
+      try{
+        const ws = new WebSocket('ws://' + location.host + '/ws/analyze');
+        ws.addEventListener('open', ()=>{ ws.send(JSON.stringify({data: currentData})); log('WebSocket: дані надіслані') });
+        ws.addEventListener('message',(m)=>{ const d = JSON.parse(m.data); displayResults(d); log('WebSocket: отримано відповідь'); ws.close(); });
+        ws.addEventListener('error', (e)=>{ log('WebSocket error'); });
+      } catch(err){ log('WebSocket помилка: '+err.message) }
+    });
+
+    function displayResults(res){
+      // Expected: { predictions: [{id:..., score:..., label:..., meta:{...}}], meta: {...} }
+      if(!res) return;
+      const area = $('resultArea'); area.innerHTML='';
+      if(res.predictions && Array.isArray(res.predictions)){
+        const ul = document.createElement('div');
+        res.predictions.slice(0,20).forEach(p=>{
+          const d = document.createElement('div');
+          d.style.padding='8px'; d.style.borderBottom='1px dashed rgba(255,255,255,0.02)';
+          d.innerHTML = `<strong>${p.id ?? p.name ?? 'object'}</strong> — <em>${p.label ?? p.class ?? 'unknown'}</em> (score: ${p.score!=null?p.score:'-'})`;
+          ul.appendChild(d);
+        });
+        area.appendChild(ul);
+      } else {
+        area.textContent = JSON.stringify(res).slice(0,800);
+      }
+    }
+
+    // Initial log
+    log('Інтерфейс готовий. Ви можете завантажити набір даних.');
+  </script>
+</body>
+</html>
