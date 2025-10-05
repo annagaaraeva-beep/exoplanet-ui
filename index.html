@@ -266,7 +266,7 @@
     log('Starting local analysis with ONNX...');
     const allResults = [];
 
-    const featureNames = ["pl_ra", "pl_dec", "pl_orbper", "pl_trandur", "pl_trandep", "pl_rade", "st_teff", "st_logg", "st_rad"];
+    const featureNames = [ 'ra', 'dec', 'orbper', 'duration', 'depth', 'rad', 'steff', 'logg', 'srad'];
 
     for (const row of currentData) {
       const sample = featureNames.map(f => {
