@@ -112,15 +112,18 @@
     function parseCSV(text){
       const rows = text.trim().split(/\r?\n/).filter(r=>r.trim()!=="");
       if(!rows.length) return [];
-      const headers = rows[0].split(/,|;|\t/).map(h=>h.trim());
-      const data = rows.slice(1).map(r=>{
-        const cols = r.split(/,|;|\t/);
-        const obj = {};
-        headers.forEach((h,i)=>obj[h]=cols[i]!==undefined?cols[i].trim():"");
-        return obj;
-      });
-      return data;
-    }
+      const headers = rows[0].split(/,|;|\t/)
+        .map(h=>h.trim().replace(/^\uFEFF/, '').toLowerCase()); // 🔹 прибираємо BOM і знижуємо регістр
+
+    const data = rows.slice(1).map(r=>{
+      const cols = r.split(/,|;|\t/);
+      const obj = {};
+      headers.forEach((h,i)=>obj[h]=cols[i]!==undefined?cols[i].trim():"");
+      return obj;
+    });
+    return data;
+  }
+
 
     let currentData = [];
     let scatterChart = null;
