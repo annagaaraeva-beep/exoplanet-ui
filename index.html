@@ -40,7 +40,7 @@
       max-height: 300px;
     }
     #resultArea {
-    max-height: 250px;
+    max-height: 450px;
     padding: 10px;
     background: rgba(255,255,255,0.01);
     border-radius: 8px;
@@ -129,7 +129,7 @@
     $('file').addEventListener('change',e=>{if(e.target.files[0]) handleFile(e.target.files[0])});
 
     async function handleFile(file){
-      log('Файл отримано: ' + file.name);
+      log('File received:' + file.name);
       const txt = await file.text();
       let parsed = [];
       if(file.type.includes('json') || file.name.toLowerCase().endsWith('.json')){
