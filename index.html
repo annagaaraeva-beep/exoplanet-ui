@@ -274,7 +274,7 @@
           
           const result = await runModel(sample);
 
-          const prediction = result.label === 0n ? "This is not exoplanet" : "This is exoplanet";
+          const prediction = result.label === 0n ? "This is not an exoplanet" : "This is an exoplanet";
 
           let output = "Information:\n";
           output += `ra         ${sample[0]}\n`;
