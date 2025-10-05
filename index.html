@@ -40,7 +40,7 @@
       max-height: 300px;
     }
     #resultArea {
-    min-height: 110px;
+    max-height: 250px;
     padding: 10px;
     background: rgba(255,255,255,0.01);
     border-radius: 8px;
@@ -263,13 +263,13 @@
           const sample = [
             parseFloat(row.ra) || 0,
             parseFloat(row.dec) || 0,
-            parseFloat(row.pl_orbper) || 0,
-            parseFloat(row.pl_rade) || 0,
-            parseFloat(row.pl_bmasse) || 0,
-            parseFloat(row.disc_year) || 0, 
-            parseFloat(row.st_teff) || 0,
-            parseFloat(row.st_rad) || 0,
-            parseFloat(row.st_mass) || 0
+            parseFloat(row.orbper) || 0,
+            parseFloat(row.duration) || 0,
+            parseFloat(row.depth) || 0,
+            parseFloat(row.rad) || 0, 
+            parseFloat(row.steff) || 0,
+            parseFloat(row.logg) || 0,
+            parseFloat(row.srad) || 0
           ];
           
           const result = await runModel(sample);
