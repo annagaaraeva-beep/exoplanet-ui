@@ -272,6 +272,12 @@
             parseFloat(row.srad) || 0
           ];
           
+          console.log('Sample data being sent to the model:', sample);
+
+          if (sample.length !== 9) {
+          throw new Error(`Invalid sample size: expected 9, got ${sample.length}`);
+          }
+
           const result = await runModel(sample);
 
           const prediction = result.label === 0n ? "This is not an exoplanet" : "This is an exoplanet";
