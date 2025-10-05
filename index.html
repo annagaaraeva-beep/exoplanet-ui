@@ -250,7 +250,7 @@
       if(!currentData || currentData.length===0){ alert('Немає даних для аналізу'); return }
       try{
         log('Запуск локального аналізу з ONNX...');
-        const results = [];
+        const allResults = [];
         
         for (const row of currentData) {
           // Витягуємо числові фічі (адаптуйте порядок і поля під вашу модель)
