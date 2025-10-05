@@ -231,42 +231,51 @@
     });
 
     async function runModel(sample) {
-      if (!onnxSession) {
-        try {
-          onnxSession = await ort.InferenceSession.create("full_model.onnx"); 
-          log('ONNX session created successfully');
-        } catch (err) {
-          log('ONNX session creation error: ' + err.message);
-          throw err;
-        }
-      }
-      
-      const tensor = new ort.Tensor("float32", Float32Array.from(sample), [1, sample.length]);
-      const feeds = { input: tensor }; 
-      
-      const results = await onnxSession.run(feeds);
-      
-      console.log("Probabilities:", results['probabilities'].data);
-      console.log("Class:", results['label'].data);
-      
-      return {
-        probabilities: results['probabilities'].data,
-        label: results['label'].data[0] 
-      };
+  if (!onnxSession) {
+    try {
+      onnxSession = await ort.InferenceSession.create("full_model.onnx");
+      log('ONNX session created successfully');
+    } catch (err) {
+      log('ONNX session creation error: ' + err.message);
+      throw err;
     }
+  }
 
-    $('analyze').addEventListener('click', async ()=>{
+  const tensor = new ort.Tensor("float32", Float32Array.from(sample), [1, sample.length]);
+  const feeds = { input: tensor };
 
-   if (!currentData || currentData.length === 0) { 
-    alert('No data available for analysis'); 
-    return; 
+  const results = await onnxSession.run(feeds);
+
+  console.log("Probabilities:", results['probabilities'].data);
+  console.log("Class:", results['label'].data);
+
+  return {
+    probabilities: results['probabilities'].data,
+    label: results['label'].data[0]
+  };
+}
+
+$('analyze').addEventListener('click', async () => {
+  if (!currentData || currentData.length === 0) {
+    alert('No data available for analysis');
+    return;
   }
 
   try {
     log('Starting local analysis with ONNX...');
     const allResults = [];
 
-    const featureNames = ["ra", "dec", "orbper", "duration", "depth", "rad", "steff", "logg", "srad"];
+    const featureNames = [
+      "pipeline-1__ra",
+      "pipeline-1__dec",
+      "pipeline-1__orbper",
+      "pipeline-1__duration",
+      "pipeline-1__depth",
+      "pipeline-1__rad",
+      "pipeline-1__steff",
+      "pipeline-1__logg",
+      "pipeline-1__srad"
+    ];
 
     for (const row of currentData) {
       const sample = featureNames.map(f => {
@@ -292,9 +301,9 @@
     log('Analysis finished');
     resultsText.textContent = allResults.join('');
 
-  } catch (err) { 
-    log('Analysis error: ' + err.message); 
-    alert('Analysis error: ' + err.message); 
+  } catch (err) {
+    log('Analysis error: ' + err.message);
+    alert('Analysis error: ' + err.message);
   }
 });
 
