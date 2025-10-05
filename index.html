@@ -256,58 +256,47 @@
 }
 
 $('analyze').addEventListener('click', async () => {
-  if (!currentData || currentData.length === 0) {
-    alert('No data available for analysis');
-    return;
-  }
 
-  try {
-    log('Starting local analysis with ONNX...');
-    const allResults = [];
-
-    const featureNames = [
-      "pipeline-1__ra",
-      "pipeline-1__dec",
-      "pipeline-1__orbper",
-      "pipeline-1__duration",
-      "pipeline-1__depth",
-      "pipeline-1__rad",
-      "pipeline-1__steff",
-      "pipeline-1__logg",
-      "pipeline-1__srad"
-    ];
-
-    for (const row of currentData) {
-      const sample = featureNames.map(f => {
-        const rawKey = f.replace('pipeline-1__', '');
-        const val = parseFloat(row[rawKey]);
-        return isNaN(val) ? 0 : val;
-      });
-
-      const result = await runModel(sample);
-
-      const prediction = result.label === 0n ? "This is not an exoplanet" : "This is an exoplanet";
-
-      let output = "Information:\n";
-      featureNames.forEach((f, i) => {
-        output += `${f.padEnd(10)} ${sample[i]}\n`;
-      });
-      output += `\n${prediction}\n`;
-      output += `Class: ${result.label}\n`;
-      output += "--------------------------------------------------\n";
-
-      allResults.push(output);
+    if (!currentData || currentData.length === 0) {
+        alert('No data available for analysis');
+        return;
     }
 
-    log('Analysis finished');
-    resultsText.textContent = allResults.join('');
+    try {
+        log('Starting local analysis with ONNX...');
+        const allResults = [];
 
-  } catch (err) {
-    log('Analysis error: ' + err.message);
-    alert('Analysis error: ' + err.message);
-  }
+        const featureNames = ["ra", "dec", "orbper", "duration", "depth", "rad", "steff", "logg", "srad"];
+
+        for (const row of currentData) {
+            const sample = featureNames.map(f => {
+                const val = parseFloat(row[f]);
+                return isNaN(val) ? 0 : val;
+            });
+
+            const result = await runModel(sample);
+
+            const prediction = result.label === 0n ? "This is not an exoplanet" : "This is an exoplanet";
+
+            let output = "Information:\n\n";
+            featureNames.forEach((f, i) => {
+                output += `${f.padEnd(10)} ${sample[i]}\n`;
+            });
+            output += `\n${prediction}\n`;
+            output += `Class: ${result.label}\n`;
+            output += "--------------------------------------------------\n";
+
+            allResults.push(output);
+        }
+
+        log('Analysis finished');
+        resultsText.textContent = allResults.join('');
+
+    } catch (err) {
+        log('Analysis error: ' + err.message);
+        alert('Analysis error: ' + err.message);
+    }
 });
-
 
     log('Interface is ready. You can upload a dataset.');
   </script>
