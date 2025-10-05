@@ -89,7 +89,10 @@
         <h3>Візуалізації & результати</h3>
         <canvas id="chartScatter"></canvas>
         <h4 style="margin-top:12px">Результат ідентифікації</h4>
-        <div id="resultArea" style="min-height:110px;padding:10px;background:rgba(255,255,255,0.01);border-radius:8px;color:var(--muted)">Тут з'являться результати від моделі.</div>
+        <h4 style="margin-top:12px">Результат ідентифікації</h4>
+        <div id="resultArea" style="min-height:110px;padding:10px;background:rgba(255,255,255,0.01);border-radius:8px;color:var(--muted);font-family:monospace;white-space:pre-wrap;">
+          <pre id="resultsText">Тут з'являться результати від моделі.</pre>
+        </div>
       </div>
     </div>
   </div>
@@ -264,21 +267,33 @@
           ];
           
           const result = await runModel(sample);
-          results.push({
-            pl_name: row.pl_name,
-            label: result.label,
-            probabilities: result.probabilities
-          });
+
+          const prediction = result.label === 0n ? "This is not exoplanet" : "This is exoplanet";
+
+          let output = "Information:\n";
+          output += `ra         ${sample[0]}\n`;
+          output += `dec        ${sample[1]}\n`;
+          output += `orbper     ${sample[2]}\n`;
+          output += `duration   ${sample[3]}\n`;
+          output += `depth      ${sample[4]}\n`;
+          output += `rad        ${sample[5]}\n`;
+          output += `steff      ${sample[6]}\n`;
+          output += `logg       ${sample[7]}\n`;
+          output += `srad       ${sample[8]}\n\n`;
+          output += `${prediction}\n`;
+          output += `Class: ${result.label}\n`;
+          output += "--------------------------------------------------\n";
+
+          allResults.push(output);
         }
-        
+
         log('Аналіз завершено');
-        $('resultArea').textContent = JSON.stringify(results, null, 2).slice(0, 500) + '...'; // Показуємо результати (обмежено для прикладу)
+        resultsText.textContent = allResults.join(''); // Об'єднуємо всі результати в один рядок
       } catch(err){ 
         log('Помилка при аналізі: '+err.message); 
         alert('Помилка при аналізі: ' + err.message);
       }
     });
-
     log('Інтерфейс готовий. Ви можете завантажити набір даних.');
   </script>
 </body>
