@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ExoDetect — інтерфейс для аналізу екзопланет</title>
-  <meta name="description" content="Веб-інтерфейс для завантаження даних екзопланет і відправки на AI/ML сервіс для ідентифікації">
+  <title>ExoDetect — Exoplanet Analysis Interface</title>
+  <meta name="description" content="Web interface for loading exoplanet data and sending it to an AI/ML service for identification">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
   <style>
@@ -39,6 +39,16 @@
       width: 100% !important;
       max-height: 300px;
     }
+    #resultArea {
+    min-height: 110px;
+    padding: 10px;
+    background: rgba(255,255,255,0.01);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: monospace;
+    white-space: pre-wrap;
+    overflow-y: auto; 
+    }
 
     footer{margin-top:18px;color:var(--muted);font-size:13px}
 
@@ -51,47 +61,45 @@
   <div class="container">
     <header>
       <div>
-        <h1>ExoDetect — UI для майбутнього AI/ML</h1>
-        <p class="lead">Завантажуйте набори даних (CSV/JSON), попередній перегляд, візуалізація та відправка на модель (через API).</p>
+        <p class="lead">Upload datasets (CSV/JSON), preview, visualize, and send to the model (via API).</p>
       </div>
     </header>
 
     <div class="grid">
       <div class="card">
-        <h3>1) Завантажити дані</h3>
+        <h3>1) Upload Data</h3>
         <div id="drop" class="upload-area">
-          <p style="margin:8px 0">Перетягніть CSV або JSON сюди або</p>
-          <label class="btn" for="file">Обрати файл</label>
+          <p style="margin:8px 0">Drag & Drop CSV or JSON here, or</p>
+          <label class="btn" for="file">Choose a File</label>
           <input id="file" type="file" accept=".csv,application/json,text/csv" />
-          <div class="meta">Підтримувані формати: CSV (рекомендовано), JSON.</div>
+          <div class="meta">Supported formats: CSV (recommended), JSON.</div>
         </div>
 
         <div style="margin-top:12px" class="actions">
-          <button id="loadSample" class="btn">Завантажити приклад</button>
-          <button id="clear" class="btn">Очистити</button>
+          <button id="loadSample" class="btn">Load Sample</button>
+          <button id="clear" class="btn">Clear</button>
         </div>
 
-        <h3 style="margin-top:14px">2) Попередній перегляд</h3>
+        <h3 style="margin-top:14px">2) Preview</h3>
         <div id="preview" style="max-height:260px;overflow:auto"></div>
 
-        <h3 style="margin-top:12px">3) Надіслати на аналіз</h3>
+        <h3 style="margin-top:12px">3) Send for Analysis</h3>
         <div class="actions">
-          <button id="analyze" class="btn">Надіслати на модель (локально)</button>
+          <button id="analyze" class="btn">Send to Model</button>
         </div>
 
         <div style="margin-top:10px">
-          <div class="log" id="log">Лог подій...
+          <div class="log" id="log">Log events...
           </div>
         </div>
       </div>
 
       <div class="card">
-        <h3>Візуалізації & результати</h3>
+        <h3>Visualizations & Results</h3>
         <canvas id="chartScatter"></canvas>
-        <h4 style="margin-top:12px">Результат ідентифікації</h4>
-        <h4 style="margin-top:12px">Результат ідентифікації</h4>
+        <h4 style="margin-top:12px">Identification Results</h4>
         <div id="resultArea" style="min-height:110px;padding:10px;background:rgba(255,255,255,0.01);border-radius:8px;color:var(--muted);font-family:monospace;white-space:pre-wrap;">
-          <pre id="resultsText">Тут з'являться результати від моделі.</pre>
+          <pre id="resultsText">Results from the model will appear here.</pre>
         </div>
       </div>
     </div>
@@ -116,7 +124,7 @@
 
     let currentData = [];
     let scatterChart = null;
-    let onnxSession = null; // Глобальна сесія для моделі (завантажуємо один раз)
+    let onnxSession = null; 
 
     $('file').addEventListener('change',e=>{if(e.target.files[0]) handleFile(e.target.files[0])});
 
@@ -126,7 +134,7 @@
       let parsed = [];
       if(file.type.includes('json') || file.name.toLowerCase().endsWith('.json')){
         try{ parsed = JSON.parse(txt); if(!Array.isArray(parsed)) parsed = [parsed]; }
-        catch(err){ log('Помилка JSON: '+err.message); alert('Невірний JSON'); return }
+        catch(err){ log('JSON Error: '+err.message); alert('Invalid JSON'); return }
       } else {
         parsed = parseCSV(txt);
       }
@@ -139,7 +147,7 @@
       const p = $('preview'); 
       p.innerHTML='';
       if(!data || data.length===0){ 
-          p.textContent='Немає даних'; 
+          p.textContent='No data available'; 
           return 
       }
       
@@ -208,59 +216,57 @@
       currentData = parseCSV(sample);
       renderPreview(currentData);
       renderChart(currentData);
-      log('Завантажено приклад даних');
+      log('Sample data loaded');
     });
 
     $('clear').addEventListener('click',()=>{
       currentData=[];
       $('preview').innerHTML='';
       if(scatterChart) scatterChart.destroy();
-      $('resultArea').textContent='Тут з\'являться результати від моделі.';
-      log('Дані очищено')
+      $('resultArea').textContent='Results from the model will appear here.';
+      log('Data cleared')
     });
 
-    // Функція для запуску моделі ONNX (адаптована)
     async function runModel(sample) {
-      // sample = масив чисел з одного рядка CSV (наприклад, [pl_orbper, pl_rade, pl_bmasse, disc_year, st_teff, st_rad, st_mass])
       if (!onnxSession) {
         try {
-          onnxSession = await ort.InferenceSession.create("model_xgb.onnx"); // Завантажуємо сесію один раз
-          log('ONNX сесію створено успішно');
+          onnxSession = await ort.InferenceSession.create("model_xgb_final.onnx"); 
+          log('ONNX session created successfully');
         } catch (err) {
-          log('Помилка створення ONNX сесії: ' + err.message);
+          log('ONNX session creation error: ' + err.message);
           throw err;
         }
       }
       
       const tensor = new ort.Tensor("float32", Float32Array.from(sample), [1, sample.length]);
-      const feeds = { input: tensor }; // Припустимо, що вхід моделі називається 'input' (адаптуйте, якщо інакше)
+      const feeds = { input: tensor }; 
       
       const results = await onnxSession.run(feeds);
       
-      console.log("Ймовірності:", results['probabilities'].data);
-      console.log("Клас:", results['label'].data);
+      console.log("Probabilities:", results['probabilities'].data);
+      console.log("Class:", results['label'].data);
       
       return {
         probabilities: results['probabilities'].data,
-        label: results['label'].data[0] // Припустимо, що label - скаляр
+        label: results['label'].data[0] 
       };
     }
 
     $('analyze').addEventListener('click', async ()=>{
-      if(!currentData || currentData.length===0){ alert('Немає даних для аналізу'); return }
+      if(!currentData || currentData.length===0){ alert('No data available for analysis'); return }
       try{
-        log('Запуск локального аналізу з ONNX...');
+        log('Starting local analysis with ONNX...');
         const allResults = [];
         
         for (const row of currentData) {
-          // Витягуємо числові фічі (адаптуйте порядок і поля під вашу модель)
+          
           const sample = [
             parseFloat(row.ra) || 0,
             parseFloat(row.dec) || 0,
             parseFloat(row.pl_orbper) || 0,
             parseFloat(row.pl_rade) || 0,
             parseFloat(row.pl_bmasse) || 0,
-            parseFloat(row.disc_year) || 0, // Якщо не потрібно, видаліть
+            parseFloat(row.disc_year) || 0, 
             parseFloat(row.st_teff) || 0,
             parseFloat(row.st_rad) || 0,
             parseFloat(row.st_mass) || 0
@@ -287,14 +293,14 @@
           allResults.push(output);
         }
 
-        log('Аналіз завершено');
-        resultsText.textContent = allResults.join(''); // Об'єднуємо всі результати в один рядок
+        log('Analysis finished');
+        resultsText.textContent = allResults.join(''); 
       } catch(err){ 
-        log('Помилка при аналізі: '+err.message); 
-        alert('Помилка при аналізі: ' + err.message);
+        log('Analysis error: '+err.message); 
+        alert('Analysis error: ' + err.message);
       }
     });
-    log('Інтерфейс готовий. Ви можете завантажити набір даних.');
+    log('Interface is ready. You can upload a dataset.');
   </script>
 </body>
 </html>
