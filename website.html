@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ExoDetect — інтерфейс для аналізу екзопланет</title>
+  <meta name="description" content="Веб-інтерфейс для завантаження даних екзопланет і відправки на AI/ML сервіс для ідентифікації">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --muted:#9aa4b2; --accent:#7c3aed;
+      --glass: rgba(255,255,255,0.03);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071022 0%,#071126 60%);color:#e6eef6}
+    .container{max-width:1100px;margin:32px auto;padding:24px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    p.lead{color:var(--muted);margin:6px 0 0;font-size:13px}
+
+    .grid{display:grid;grid-template-columns:1fr 420px;gap:20px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.04);padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+
+    .upload-area{border:2px dashed rgba(255,255,255,0.04);padding:18px;border-radius:10px;text-align:center;transition:all .15s}
+    .upload-area.dragover{border-color:rgba(124,58,237,0.9);transform:translateY(-4px)}
+    .btn{display:inline-block;padding:8px 14px;border-radius:8px;background:var(--accent);color:white;text-decoration:none;font-weight:600;margin-top:8px;border:none;cursor:pointer}
+    input[type=file]{display:none}
+
+    .meta{font-size:13px;color:var(--muted);margin-top:6px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:6px 8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.02)}
+
+    .log{height:170px;overflow:auto;background:var(--glass);padding:10px;border-radius:8px;font-family:monospace;font-size:12px;color:var(--muted)}
+
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+    #chartScatter {
+      width: 100% !important;
+      max-height: 300px;
+    }
+
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+
+    @media (max-width:980px){
+      .grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>ExoDetect — UI для майбутнього AI/ML</h1>
+        <p class="lead">Завантажуйте набори даних (CSV/JSON), попередній перегляд, візуалізація та відправка на модель (через API).</p>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h3>1) Завантажити дані</h3>
+        <div id="drop" class="upload-area">
+          <p style="margin:8px 0">Перетягніть CSV або JSON сюди або</p>
+          <label class="btn" for="file">Обрати файл</label>
+          <input id="file" type="file" accept=".csv,application/json,text/csv" />
+          <div class="meta">Підтримувані формати: CSV (рекомендовано), JSON.</div>
+        </div>
+
+        <div style="margin-top:12px" class="actions">
+          <button id="loadSample" class="btn">Завантажити приклад</button>
+          <button id="clear" class="btn">Очистити</button>
+        </div>
+
+        <h3 style="margin-top:14px">2) Попередній перегляд</h3>
+        <div id="preview" style="max-height:260px;overflow:auto"></div>
+
+        <h3 style="margin-top:12px">3) Надіслати на аналіз</h3>
+        <div class="actions">
+          <button id="analyze" class="btn">Надіслати на модель (локально)</button>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="log" id="log">Лог подій...
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Візуалізації & результати</h3>
+        <canvas id="chartScatter"></canvas>
+        <h4 style="margin-top:12px">Результат ідентифікації</h4>
+        <div id="resultArea" style="min-height:110px;padding:10px;background:rgba(255,255,255,0.01);border-radius:8px;color:var(--muted)">Тут з'являться результати від моделі.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const log = (s)=>{const l=$('log'); l.textContent = (new Date()).toLocaleTimeString()+ ' — ' + s + '\n' + l.textContent}
+
+    function parseCSV(text){
+      const rows = text.trim().split(/\r?\n/).filter(r=>r.trim()!=="");
+      if(!rows.length) return [];
+      const headers = rows[0].split(/,|;|\t/).map(h=>h.trim());
+      const data = rows.slice(1).map(r=>{
+        const cols = r.split(/,|;|\t/);
+        const obj = {};
+        headers.forEach((h,i)=>obj[h]=cols[i]!==undefined?cols[i].trim():"");
+        return obj;
+      });
+      return data;
+    }
+
+    let currentData = [];
+    let scatterChart = null;
+    let onnxSession = null; // Глобальна сесія для моделі (завантажуємо один раз)
+
+    $('file').addEventListener('change',e=>{if(e.target.files[0]) handleFile(e.target.files[0])});
+
+    async function handleFile(file){
+      log('Файл отримано: ' + file.name);
+      const txt = await file.text();
+      let parsed = [];
+      if(file.type.includes('json') || file.name.toLowerCase().endsWith('.json')){
+        try{ parsed = JSON.parse(txt); if(!Array.isArray(parsed)) parsed = [parsed]; }
+        catch(err){ log('Помилка JSON: '+err.message); alert('Невірний JSON'); return }
+      } else {
+        parsed = parseCSV(txt);
+      }
+      currentData = parsed;
+      renderPreview(parsed);
+      renderChart(parsed);
+    }
+
+    function renderPreview(data){
+      const p = $('preview'); 
+      p.innerHTML='';
+      if(!data || data.length===0){ 
+          p.textContent='Немає даних'; 
+          return 
+      }
+      
+      const keys = Object.keys(data[0]).filter(k => k !== 'disp');
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr>' + keys.map(k=>`<th>${k}</th>`).join('') + '</tr>';
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      data.slice(0,30).forEach(row=>{
+          const tr = document.createElement('tr');
+          keys.forEach(k=>{
+            const td = document.createElement('td');
+            td.textContent = row[k] ?? '';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      p.appendChild(table);
+    }
+
+    function renderChart(data){
+      const ctx = document.getElementById('chartScatter').getContext('2d');
+      if(scatterChart){ scatterChart.destroy(); }
+
+      const points = data
+        .map(d => ({
+          x: parseFloat(d.orbper ?? d.pl_orbper) || null,
+          y: parseFloat(d.rad ?? d.pl_rade) || null,
+          label: d.pl_name ?? d.name ?? ''
+        }))
+        .filter(p => p.x !== null && p.y !== null);
+
+      if(points.length === 0){ return; }
+
+      scatterChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Orbital period (days) vs Radius (R⊕)',
+            data: points,
+            backgroundColor: 'rgba(124,58,237,0.7)'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: ctx => `${ctx.raw.label}: ${ctx.raw.x} d, ${ctx.raw.y} R⊕`
+              }
+            }
+          },
+          scales: {
+            x: { title: { display: true, text: 'Orbital period (days)' } },
+            y: { title: { display: true, text: 'Radius (R⊕)' } }
+          }
+        }
+      });
+    }
+
+    $('loadSample').addEventListener('click',()=>{
+      const sample = `pl_name,pl_orbper,pl_rade,pl_bmasse,disc_year,st_teff,st_rad,st_mass\nKepler-186f,129.9,1.11,1.1,2014,3788,0.47,0.54\nHD 209458 b,3.524,1.36,220,1999,6065,1.2,1.15`;
+      currentData = parseCSV(sample);
+      renderPreview(currentData);
+      renderChart(currentData);
+      log('Завантажено приклад даних');
+    });
+
+    $('clear').addEventListener('click',()=>{
+      currentData=[];
+      $('preview').innerHTML='';
+      if(scatterChart) scatterChart.destroy();
+      $('resultArea').textContent='Тут з\'являться результати від моделі.';
+      log('Дані очищено')
+    });
+
+    // Функція для запуску моделі ONNX (адаптована)
+    async function runModel(sample) {
+      // sample = масив чисел з одного рядка CSV (наприклад, [pl_orbper, pl_rade, pl_bmasse, disc_year, st_teff, st_rad, st_mass])
+      if (!onnxSession) {
+        try {
+          onnxSession = await ort.InferenceSession.create("model_xgb.onnx"); // Завантажуємо сесію один раз
+          log('ONNX сесію створено успішно');
+        } catch (err) {
+          log('Помилка створення ONNX сесії: ' + err.message);
+          throw err;
+        }
+      }
+      
+      const tensor = new ort.Tensor("float32", Float32Array.from(sample), [1, sample.length]);
+      const feeds = { input: tensor }; // Припустимо, що вхід моделі називається 'input' (адаптуйте, якщо інакше)
+      
+      const results = await onnxSession.run(feeds);
+      
+      console.log("Ймовірності:", results['probabilities'].data);
+      console.log("Клас:", results['label'].data);
+      
+      return {
+        probabilities: results['probabilities'].data,
+        label: results['label'].data[0] // Припустимо, що label - скаляр
+      };
+    }
+
+    $('analyze').addEventListener('click', async ()=>{
+      if(!currentData || currentData.length===0){ alert('Немає даних для аналізу'); return }
+      try{
+        log('Запуск локального аналізу з ONNX...');
+        const results = [];
+        
+        for (const row of currentData) {
+          // Витягуємо числові фічі (адаптуйте порядок і поля під вашу модель)
+          const sample = [
+            parseFloat(row.pl_orbper) || 0,
+            parseFloat(row.pl_rade) || 0,
+            parseFloat(row.pl_bmasse) || 0,
+            parseFloat(row.disc_year) || 0, // Якщо не потрібно, видаліть
+            parseFloat(row.st_teff) || 0,
+            parseFloat(row.st_rad) || 0,
+            parseFloat(row.st_mass) || 0
+          ];
+          
+          const result = await runModel(sample);
+          results.push({
+            pl_name: row.pl_name,
+            label: result.label,
+            probabilities: result.probabilities
+          });
+        }
+        
+        log('Аналіз завершено');
+        $('resultArea').textContent = JSON.stringify(results, null, 2).slice(0, 500) + '...'; // Показуємо результати (обмежено для прикладу)
+      } catch(err){ 
+        log('Помилка при аналізі: '+err.message); 
+        alert('Помилка при аналізі: ' + err.message);
+      }
+    });
+
+    log('Інтерфейс готовий. Ви можете завантажити набір даних.');
+  </script>
+</body>
+</html>
