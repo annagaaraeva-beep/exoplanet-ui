@@ -257,7 +257,7 @@
 
     $('analyze').addEventListener('click', async ()=>{
 
-  if (!currentData || currentData.length === 0) { 
+   if (!currentData || currentData.length === 0) { 
     alert('No data available for analysis'); 
     return; 
   }
@@ -266,17 +266,14 @@
     log('Starting local analysis with ONNX...');
     const allResults = [];
 
-    const featureNames = [ 'ra', 'dec', 'orbper', 'duration', 'depth', 'rad', 'steff', 'logg', 'srad'];
+    const featureNames = ["ra", "dec", "orbper", "duration", "depth", "rad", "steff", "logg", "srad"];
 
     for (const row of currentData) {
       const sample = featureNames.map(f => {
         const val = parseFloat(row[f]);
         return isNaN(val) ? 0 : val;
       });
-      
-      if (sample.length !==9) {
-        continue;
-      }
+
       const result = await runModel(sample);
 
       const prediction = result.label === 0n ? "This is not an exoplanet" : "This is an exoplanet";
