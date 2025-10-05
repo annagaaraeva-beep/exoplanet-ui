@@ -279,7 +279,8 @@ $('analyze').addEventListener('click', async () => {
 
     for (const row of currentData) {
       const sample = featureNames.map(f => {
-        const val = parseFloat(row[f]);
+        const rawKey = f.replace('pipeline-1__', '');
+        const val = parseFloat(row[rawKey]);
         return isNaN(val) ? 0 : val;
       });
 
