@@ -252,6 +252,8 @@
         for (const row of currentData) {
           // Витягуємо числові фічі (адаптуйте порядок і поля під вашу модель)
           const sample = [
+            parseFloat(row.ra) || 0,
+            parseFloat(row.dec) || 0,
             parseFloat(row.pl_orbper) || 0,
             parseFloat(row.pl_rade) || 0,
             parseFloat(row.pl_bmasse) || 0,
