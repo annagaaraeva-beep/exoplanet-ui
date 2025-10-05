@@ -272,7 +272,9 @@
         }
         
         log('Аналіз завершено');
-        $('resultArea').textContent = JSON.stringify(results, null, 2).slice(0, 500) + '...'; // Показуємо результати (обмежено для прикладу)
+        $('resultArea').textContent = JSON.stringify(results, (key, value) => 
+        typeof value === 'bigint' ? value.toString() : value
+        , 2).slice(0, 500) + '...';
       } catch(err){ 
         log('Помилка при аналізі: '+err.message); 
         alert('Помилка при аналізі: ' + err.message);
