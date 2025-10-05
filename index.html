@@ -230,7 +230,7 @@
     async function runModel(sample) {
       if (!onnxSession) {
         try {
-          onnxSession = await ort.InferenceSession.create("model_xgb.onnx"); 
+          onnxSession = await ort.InferenceSession.create("model_xgb_final.onnx"); 
           log('ONNX session created successfully');
         } catch (err) {
           log('ONNX session creation error: ' + err.message);
@@ -263,14 +263,17 @@
     log('Starting local analysis with ONNX...');
     const allResults = [];
 
-    const featureNames = ["ra", "dec", "orbper", "duration", "depth", "rad", "steff", "logg", "srad"];
+    const featureNames = ["pl_ra", "pl_dec", "pl_orbper", "pl_trandur", "pl_trandep", "pl_rade", "st_teff", "st_logg", "st_rad"];
 
     for (const row of currentData) {
       const sample = featureNames.map(f => {
         const val = parseFloat(row[f]);
         return isNaN(val) ? 0 : val;
       });
-
+      
+      if (sample.length !==9) {
+        continue;
+      }
       const result = await runModel(sample);
 
       const prediction = result.label === 0n ? "This is not an exoplanet" : "This is an exoplanet";
