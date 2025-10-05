@@ -230,7 +230,7 @@
     async function runModel(sample) {
       if (!onnxSession) {
         try {
-          onnxSession = await ort.InferenceSession.create("model_xgb_final.onnx"); 
+          onnxSession = await ort.InferenceSession.create("model_xgb.onnx"); 
           log('ONNX session created successfully');
         } catch (err) {
           log('ONNX session creation error: ' + err.message);
